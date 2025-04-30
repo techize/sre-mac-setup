@@ -9,6 +9,13 @@ Install brew
 ``` /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" ```
 
 
+Add Homebrew to PATH:
+```
+echo >> /Users/admin/.zprofile
+echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> /Users/admin/.zprofile
+eval "$(/opt/homebrew/bin/brew shellenv)"
+```
+
 # Clone the Repo
  ```
  git clone https://github.com/techize/sre-mac-setup.git

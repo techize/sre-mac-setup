@@ -51,3 +51,4 @@ tmux tmux-mem-cpu-load tmux-sessionizer tmux-xpanes tmuxinator tmuxinator-comple
 az-kubelogin
 maccy
 btop
+python@3.13
