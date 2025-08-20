@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Apply local tooling CONTRIBUTING and pre-commit snippet to a target repo
+# Usage: sp-apply-contrib [target_repo_dir]
+
+TARGET_DIR="${1:-$PWD}"
+SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+T_CONTRIB="$SRC_DIR/templates/CONTRIBUTING.local-tools.md"
+T_PRECOMMIT="$SRC_DIR/templates/pre-commit.local-tools.yaml"
+
+if [ ! -d "$TARGET_DIR" ]; then
+  echo "Target dir not found: $TARGET_DIR" >&2; exit 1
+fi
+
+# 1) CONTRIBUTING.md
+C_OUT="$TARGET_DIR/CONTRIBUTING.md"
+if [ -f "$C_OUT" ]; then
+  echo "Appending local tools section to existing CONTRIBUTING.md"
+  printf "\n\n---\n\n" >> "$C_OUT"
+  cat "$T_CONTRIB" >> "$C_OUT"
+else
+  echo "Creating CONTRIBUTING.md from template"
+  cp "$T_CONTRIB" "$C_OUT"
+fi
+
+# 2) .pre-commit-config.yaml
+PC_OUT="$TARGET_DIR/.pre-commit-config.yaml"
+if [ ! -f "$PC_OUT" ]; then
+  echo "Creating .pre-commit-config.yaml with local tools snippet"
+  {
+    echo "repos:"; cat "$T_PRECOMMIT"
+  } > "$PC_OUT"
+else
+  if grep -q 'sp-guard-prod' "$PC_OUT" || grep -q 'sp-helm-check' "$PC_OUT"; then
+    echo "Pre-commit local tools already present; skipping append"
+  else
+    if grep -q '^repos:' "$PC_OUT"; then
+      echo "Appending local tools block to existing repos list"
+      # Ensure file ends with newline
+      tail -c1 "$PC_OUT" | read -r _ || echo >> "$PC_OUT"
+      cat "$T_PRECOMMIT" >> "$PC_OUT"
+    else
+      echo "No top-level 'repos:' found in $PC_OUT; please merge manually" >&2
+      exit 2
+    fi
+  fi
+fi
+
+echo "Done: CONTRIBUTING.md and pre-commit snippet applied to $TARGET_DIR"

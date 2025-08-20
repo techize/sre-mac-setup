@@ -1,0 +1,17 @@
+  - repo: local
+    hooks:
+      - id: guard-production-values
+        name: Guard protected files on commit (local)
+        entry: bash
+        args: [ -lc, 'command -v sp-guard-prod >/dev/null || { echo "sp-guard-prod not installed; skipping" >&2; exit 0; }; sp-guard-prod' ]
+        language: system
+        pass_filenames: false
+        stages: [commit]
+
+      - id: helm-lint-template
+        name: Helm lint & template (local)
+        entry: bash
+        args: [ -lc, 'command -v sp-helm-check >/dev/null || { echo "sp-helm-check not installed; skipping" >&2; exit 0; }; sp-helm-check' ]
+        language: system
+        pass_filenames: false
+        stages: [push]
