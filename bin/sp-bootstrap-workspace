@@ -3,6 +3,8 @@ set -euo pipefail
 # Generate a VS Code multi-root workspace including repos under a base dir.
 # Usage: sp-bootstrap-workspace [base_dir] [output_file]
 # Defaults: base_dir=$HOME/repos, output_file=$PWD/sp-workspace.code-workspace
+# Behavior: includes all top-level directories within base_dir (excluding dotdirs)
+# Optional env: SP_WS_EXCLUDE (space-separated globs to skip, e.g. "archive tmp")
 
 BASE_DIR="${1:-$HOME/repos}"
 OUT_FILE="${2:-$PWD/sp-workspace.code-workspace}"
@@ -10,20 +12,31 @@ OUT_FILE="${2:-$PWD/sp-workspace.code-workspace}"
 mkdir -p "$(dirname "$OUT_FILE")"
 
 folders=()
-add_folder(){
-  local name="$1"; local dir="$BASE_DIR/$name"
-  [ -d "$dir" ] && folders+=("{\"path\": \"$dir\"}")
+
+# Build exclude patterns
+IFS=' ' read -r -a EXCLUDES <<< "${SP_WS_EXCLUDE:-}"
+should_exclude() {
+  local base="$1"
+  # Skip dotdirs
+  [[ "$base" == .* ]] && return 0
+  # Skip common temp dirs
+  case "$base" in tmp|temp|archive|Archive) return 0;; esac
+  # User-provided globs
+  for pat in "${EXCLUDES[@]}"; do
+    [[ -z "$pat" ]] && continue
+    [[ "$base" == $pat ]] && return 0
+  done
+  return 1
 }
 
-add_folder eks
-add_folder tf-iam
-add_folder tf-sportpursuit-pagerduty
-add_folder tf-dns
-add_folder tf-module-spa-application
-add_folder mcp
-add_folder sre-mac-setup
-add_folder sp-taskmaster
-add_folder sp-docs
+# Iterate top-level directories safely
+while IFS= read -r -d '' dir; do
+  base="${dir##*/}"
+  if should_exclude "$base"; then
+    continue
+  fi
+  folders+=("{\"path\": \"$dir\"}")
+done < <(find "$BASE_DIR" -mindepth 1 -maxdepth 1 -type d -print0 2>/dev/null)
 
 printf '{\n  "folders": [\n' > "$OUT_FILE"
 for i in "${!folders[@]}"; do
