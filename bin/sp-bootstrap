@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# One-shot bootstrap for a new workstation
+# - Clone repos
+# - Initialize knowledge repos (tasks/docs)
+# - Install tool symlinks
+# - Generate VS Code workspace
+# Usage: sp-bootstrap [base_dir]
+
+BASE_DIR="${1:-$HOME/repos}"
+
+# Ensure sre-mac-setup exists if we're running a raw script
+if [ ! -d "$BASE_DIR/sre-mac-setup" ]; then
+  mkdir -p "$BASE_DIR"
+  git clone https://github.com/techize/sre-mac-setup.git "$BASE_DIR/sre-mac-setup"
+fi
+
+"$BASE_DIR/sre-mac-setup/bin/sp-clone-repos" "$BASE_DIR"
+"$BASE_DIR/sre-mac-setup/bin/sp-init-knowledge-repos" "$BASE_DIR"
+"$BASE_DIR/sre-mac-setup/bin/sp-tools" install
+"$BASE_DIR/sre-mac-setup/bin/sp-bootstrap-workspace" "$BASE_DIR" "$BASE_DIR/sp.code-workspace"
+
+echo "Bootstrap complete. Open: $BASE_DIR/sp.code-workspace"

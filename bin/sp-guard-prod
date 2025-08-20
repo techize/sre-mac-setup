@@ -4,6 +4,7 @@ set -euo pipefail
 # Usage: sp-guard-prod [protected_path ...]
 # If no paths provided, defaults to common sensitive files (when present):
 #   deployment/helm_charts/jenkins/values.production.yaml
+# Or, if .sp-guard.yml exists in repo root, reads protected paths from it.
 
 # Allow override via env ALLOW_PROD_VALUES=1 or on release/hotfix branches.
 branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo)"
@@ -13,13 +14,24 @@ fi
 
 mapfile -t paths < <(printf "%s\n" "$@")
 if [ ${#paths[@]} -eq 0 ]; then
-  defaults=(
-    "deployment/helm_charts/jenkins/values.production.yaml"
-  )
-  paths=()
-  for p in "${defaults[@]}"; do
-    [ -e "$p" ] && paths+=("$p")
-  done
+  # Try .sp-guard.yml
+  if [ -f .sp-guard.yml ]; then
+    # very small YAML reader: read lines under 'protected:' as list items
+    while IFS= read -r line; do
+      case "$line" in
+        "- "*) p="${line#- }"; [ -n "$p" ] && paths+=("$p") ;;
+      esac
+    done < <(awk '/^protected:/ {flag=1; next} /^\S/ {flag=0} flag {print}' .sp-guard.yml)
+  fi
+  if [ ${#paths[@]} -eq 0 ]; then
+    defaults=(
+      "deployment/helm_charts/jenkins/values.production.yaml"
+    )
+    paths=()
+    for p in "${defaults[@]}"; do
+      [ -e "$p" ] && paths+=("$p")
+    done
+  fi
 fi
 
 if [ ${#paths[@]} -eq 0 ]; then
