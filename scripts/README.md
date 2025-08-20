@@ -57,6 +57,7 @@ Pipe a text report to email daily:
   /usr/bin/python3 clone_bitbucket_projects.py --projects DEVOPS --dest ~/repos --sync-default --report text \
   | mail -s "DEVOPS repo sync report" you@company.com
 ```
+
 Or use the wrapper script (recommended):
 
 ```bash
