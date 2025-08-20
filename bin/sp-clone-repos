@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Clone a standard set of repos into a base dir if missing.
+# Usage: sp-clone-repos [base_dir]
+# Requires: git access to your org remotes (Bitbucket/GitHub).
+
+BASE_DIR="${1:-$HOME/repos}"
+mkdir -p "$BASE_DIR"
+
+# Define repo sources here (name url)
+REPOS=(
+  "eks git@bitbucket.org:sportpursuit/eks.git"
+  "tf-iam git@bitbucket.org:sportpursuit/tf-iam.git"
+  "tf-sportpursuit-pagerduty git@bitbucket.org:sportpursuit/tf-sportpursuit-pagerduty.git"
+  "tf-dns git@bitbucket.org:sportpursuit/tf-dns.git"
+  "tf-module-spa-application git@bitbucket.org:sportpursuit/tf-module-spa-application.git"
+  "mcp git@bitbucket.org:sportpursuit/mcp.git"
+  "sre-mac-setup https://github.com/techize/sre-mac-setup.git"
+  "sp-taskmaster git@github.com:techize/sp-taskmaster.git"
+  "sp-docs git@github.com:techize/sp-docs.git"
+)
+
+for entry in "${REPOS[@]}"; do
+  name="${entry%% *}"; url="${entry#* }";
+  dest="$BASE_DIR/$name"
+  if [ -d "$dest/.git" ]; then
+    echo "[skip] $name already exists"
+  else
+    echo "[clone] $name from $url"
+    git clone "$url" "$dest"
+  fi
+ done
+ echo "Done. Base dir: $BASE_DIR"
