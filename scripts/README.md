@@ -1,0 +1,36 @@
+# Bitbucket workspace cloner
+
+A small Python utility to list and clone all repositories from specific Bitbucket Cloud project(s) in a workspace.
+
+## Prereqs
+
+- Python 3.9+
+- Environment variables set:
+  - `BB_WORKSPACE` (e.g. `sportpursuit`)
+  - Preferred: `BITBUCKET_USERNAME` (your Atlassian account email) and `BITBUCKET_API_TOKEN`
+  - Alternatively: `BITBUCKET_ACCESS_TOKEN` (workspace/project/repo access token)
+  - Legacy fallback: `BB_USERNAME` and `BB_APP_PASSWORD`
+
+## Install deps
+
+```bash
+pip3 install -r requirements.txt
+```
+
+## Usage
+
+```bash
+# List repos in DEVOPS
+python3 clone_bitbucket_projects.py --projects DEVOPS --dest ~/repos --list
+
+# Dry-run clone
+python3 clone_bitbucket_projects.py --projects DEVOPS --dest ~/repos --dry-run
+
+# Clone multiple projects
+python3 clone_bitbucket_projects.py --projects DEVOPS,PLATFORM --dest ~/repos
+```
+
+## Notes
+
+- Uses SSH clone URLs when available; ensure your SSH key is configured for Bitbucket.
+- If a repo folder already exists, the script will fetch/prune instead of recloning.
