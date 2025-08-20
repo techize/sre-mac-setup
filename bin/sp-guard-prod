@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Guard against accidental changes to protected files in a git repo.
+# Usage: sp-guard-prod [protected_path ...]
+# If no paths provided, defaults to common sensitive files (when present):
+#   deployment/helm_charts/jenkins/values.production.yaml
+
+# Allow override via env ALLOW_PROD_VALUES=1 or on release/hotfix branches.
+branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo)"
+if [[ "${ALLOW_PROD_VALUES:-0}" == "1" ]] || [[ "$branch" =~ ^(release/|hotfix/) ]]; then
+  exit 0
+fi
+
+mapfile -t paths < <(printf "%s\n" "$@")
+if [ ${#paths[@]} -eq 0 ]; then
+  defaults=(
+    "deployment/helm_charts/jenkins/values.production.yaml"
+  )
+  paths=()
+  for p in "${defaults[@]}"; do
+    [ -e "$p" ] && paths+=("$p")
+  done
+fi
+
+if [ ${#paths[@]} -eq 0 ]; then
+  # Nothing to guard in this repo
+  exit 0
+fi
+
+staged="$(git diff --cached --name-only || true)"
+for p in "${paths[@]}"; do
+  if printf "%s\n" "$staged" | grep -qx "$p"; then
+    echo "Error: Attempt to modify protected file: $p"
+    echo "If intentional, export ALLOW_PROD_VALUES=1 and re-commit, or use a release/hotfix branch."
+    exit 1
+  fi
+done
+
+exit 0

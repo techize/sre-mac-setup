@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BIN_DIR="$REPO_DIR/bin"
+TARGET_DIR="$HOME/bin"
+
+usage() {
+  cat <<EOF
+Usage: sp-tools <command>
+Commands:
+  install     Symlink all sp-* scripts from $BIN_DIR into $TARGET_DIR
+  uninstall   Remove symlinks in $TARGET_DIR that point to $BIN_DIR
+  list        Show what would be linked
+EOF
+}
+
+ensure_target_dir() {
+  mkdir -p "$TARGET_DIR"
+}
+
+list_scripts() {
+  find "$BIN_DIR" -maxdepth 1 -type f -name 'sp-*' -perm +111 -print | sort
+}
+
+cmd_install() {
+  ensure_target_dir
+  while IFS= read -r script; do
+    base="$(basename "$script")"
+    ln -sf "$script" "$TARGET_DIR/$base"
+    echo "linked $TARGET_DIR/$base -> $script"
+  done < <(list_scripts)
+}
+
+cmd_uninstall() {
+  while IFS= read -r script; do
+    base="$(basename "$script")"
+    link="$TARGET_DIR/$base"
+    if [ -L "$link" ] && [ "$(readlink "$link")" = "$script" ]; then
+      rm -f "$link"
+      echo "removed $link"
+    fi
+  done < <(list_scripts)
+}
+
+cmd_list() {
+  while IFS= read -r script; do
+    echo "$(basename "$script") -> $script"
+  done < <(list_scripts)
+}
+
+case "${1:-}" in
+  install) cmd_install ;;
+  uninstall) cmd_uninstall ;;
+  list) cmd_list ;;
+  *) usage; exit 1 ;;
+ esac

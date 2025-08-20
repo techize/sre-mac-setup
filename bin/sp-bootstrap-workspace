@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Generate a VS Code multi-root workspace including repos under a base dir.
+# Usage: sp-bootstrap-workspace [base_dir] [output_file]
+# Defaults: base_dir=$HOME/repos, output_file=$PWD/sp-workspace.code-workspace
+
+BASE_DIR="${1:-$HOME/repos}"
+OUT_FILE="${2:-$PWD/sp-workspace.code-workspace}"
+
+mkdir -p "$(dirname "$OUT_FILE")"
+
+folders=()
+add_folder(){
+  local name="$1"; local dir="$BASE_DIR/$name"
+  [ -d "$dir" ] && folders+=("{\"path\": \"$dir\"}")
+}
+
+add_folder eks
+add_folder tf-iam
+add_folder tf-sportpursuit-pagerduty
+add_folder tf-dns
+add_folder tf-module-spa-application
+add_folder mcp
+add_folder sre-mac-setup
+add_folder sp-taskmaster
+add_folder sp-docs
+
+printf '{\n  "folders": [\n' > "$OUT_FILE"
+for i in "${!folders[@]}"; do
+  sep=","; [ "$i" -eq $((${#folders[@]}-1)) ] && sep=""
+  printf "    %s%s\n" "${folders[$i]}" "$sep" >> "$OUT_FILE"
+done
+cat >> "$OUT_FILE" <<'JSON'
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/.git": true,
+      "**/.DS_Store": true
+    }
+  }
+}
+JSON
+
+echo "Wrote workspace: $OUT_FILE"

@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Initialize lightweight task and docs repos under a base dir
+# Usage: sp-init-knowledge-repos [base_dir]
+# Default base_dir=$HOME/repos
+
+BASE_DIR="${1:-$HOME/repos}"
+TASK_REPO="$BASE_DIR/sp-taskmaster"
+DOCS_REPO="$BASE_DIR/sp-docs"
+
+mkdir -p "$TASK_REPO/tasks" "$TASK_REPO/bin" "$DOCS_REPO/docs"
+
+# Task repo skeleton
+if [ ! -f "$TASK_REPO/README.md" ]; then
+  cat > "$TASK_REPO/README.md" <<'MD'
+# sp-taskmaster
+
+Lightweight repo to track personal/team tasks outside of code repos.
+
+- Store tasks as Markdown in the `tasks/` folder.
+- Optional CLI `sp-task` to append tasks quickly.
+MD
+fi
+
+for f in inbox.md backlog.md done.md; do
+  [ -f "$TASK_REPO/tasks/$f" ] || printf "# %s\n" "${f%.md^}" > "$TASK_REPO/tasks/$f"
+  if [ "$f" = inbox.md ]; then
+    grep -q "Example:" "$TASK_REPO/tasks/$f" 2>/dev/null || echo "- [ ] Example: Confirm Jenkins error pages in UAT/UAT-test" >> "$TASK_REPO/tasks/$f"
+  fi
+done
+
+# sp-task helper
+if [ ! -f "$TASK_REPO/bin/sp-task" ]; then
+  cat > "$TASK_REPO/bin/sp-task" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TASKS_DIR="$REPO_DIR/tasks"
+INBOX="$TASKS_DIR/inbox.md"
+usage(){ cat <<EOF
+Usage: sp-task <command> [args]
+Commands:
+  add "text"   Append a task to inbox with timestamp
+  list         Show inbox tasks
+EOF
+}
+cmd_add(){ local text="${1:-}"; [ -z "$text" ] && { echo "Provide task text"; exit 1; }; ts="$(date '+%Y-%m-%d %H:%M')"; echo "- [ ] $text  ($ts)" >> "$INBOX"; echo "Added to inbox: $text"; }
+cmd_list(){ sed -n '1,200p' "$INBOX"; }
+case "${1:-}" in add) shift; cmd_add "$*";; list) cmd_list;; *) usage; exit 1;; esac
+SH
+  chmod +x "$TASK_REPO/bin/sp-task"
+fi
+
+# Docs repo skeleton
+if [ ! -f "$DOCS_REPO/README.md" ]; then
+  cat > "$DOCS_REPO/README.md" <<'MD'
+# sp-docs
+
+Shared docs and rules of engagement for workflows. Keep this separate from code repos.
+MD
+fi
+if [ ! -f "$DOCS_REPO/docs/rules.md" ]; then
+  cat > "$DOCS_REPO/docs/rules.md" <<'MD'
+# Rules of Engagement (WIP)
+
+- Do not change production values in feature branches; use release/hotfix or explicit overrides.
+- Gate risky features behind values and enable in non-prod first.
+- Prefer local, opt-in checks (pre-commit) over blocking CI for exploratory work.
+- Keep Jira tickets updated with what/why/how and clear prod TODO steps.
+MD
+fi
+
+echo "Initialized: $TASK_REPO and $DOCS_REPO"

@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Helm lint/template helper
+# Usage: sp-helm-check [chart_dir] [--values values1.yaml --values values2.yaml ...]
+# Defaults: chart_dir=deployment/helm_charts/jenkins and values for uat/uat-test
+
+if ! command -v helm >/dev/null 2>&1; then
+  echo "helm not found in PATH; skipping helm checks" >&2
+  exit 0
+fi
+
+CHART_DIR="${1:-deployment/helm_charts/jenkins}"
+shift || true
+
+# Collect values args; default to uat and uat-test if none provided and files exist
+vals=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --values|-f)
+      shift; [ $# -gt 0 ] && vals+=("-f" "$1");;
+    *) vals+=("$1");;
+  esac
+  shift || true
+done
+
+if [ ${#vals[@]} -eq 0 ]; then
+  [ -f "$CHART_DIR/values.uat.yaml" ] && vals+=("-f" "$CHART_DIR/values.uat.yaml")
+  [ -f "$CHART_DIR/values.uat-test.yaml" ] && vals+=("-f" "$CHART_DIR/values.uat-test.yaml")
+fi
+
+helm lint "$CHART_DIR" || { echo "helm lint failed"; exit 1; }
+helm template jenkins "$CHART_DIR" "${vals[@]}" >/dev/null || { echo "helm template failed"; exit 1; }
