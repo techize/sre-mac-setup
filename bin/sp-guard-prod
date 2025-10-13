@@ -12,7 +12,11 @@ if [[ "${ALLOW_PROD_VALUES:-0}" == "1" ]] || [[ "$branch" =~ ^(release/|hotfix/)
   exit 0
 fi
 
-mapfile -t paths < <(printf "%s\n" "$@")
+# Use portable array building instead of mapfile
+paths=()
+while IFS= read -r -d '' arg; do
+  paths+=("$arg")
+done < <(printf '%s\0' "$@")
 if [ ${#paths[@]} -eq 0 ]; then
   # Try .sp-guard.yml
   if [ -f .sp-guard.yml ]; then
