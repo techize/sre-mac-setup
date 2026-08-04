@@ -12,30 +12,61 @@ if [[ "${ALLOW_PROD_VALUES:-0}" == "1" ]] || [[ "$branch" =~ ^(release/|hotfix/)
   exit 0
 fi
 
-# Use portable array building instead of mapfile
+# Protected paths come from argv, else .sp-guard.yml, else the built-in defaults.
+#
+# NOTE: do not rebuild this from `printf '%s\0' "$@"`. printf applies its format
+# once even with zero arguments, so with no argv that emits a single NUL and the
+# array ends up holding one empty string rather than being empty. That made
+# ${#paths[@]} equal 1, so the .sp-guard.yml and defaults branches below were
+# unreachable and the only "protected path" ever checked was "" - the guard
+# silently protected nothing while still reporting success. Assign from "$@"
+# directly instead; it is just as portable and cannot misfire on an empty argv.
 paths=()
-while IFS= read -r -d '' arg; do
-  paths+=("$arg")
-done < <(printf '%s\0' "$@")
+if [ "$#" -gt 0 ]; then
+  paths=("$@")
+fi
+
+if [ ${#paths[@]} -eq 0 ] && [ -f .sp-guard.yml ]; then
+  # very small YAML reader: read lines under 'protected:' as list items.
+  # Leading whitespace is stripped first - both of these are valid YAML and the
+  # indented form is the more common one, but an untrimmed `case` matches only
+  # the flush-left variant and silently yields no paths for the other:
+  #   protected:        protected:
+  #   - a/b.yaml          - a/b.yaml
+  while IFS= read -r line; do
+    line="${line#"${line%%[![:space:]]*}"}"
+    case "$line" in
+      "- "*)
+        p="${line#- }"
+        # strip a trailing comment and any surrounding quotes/space
+        p="${p%%#*}"
+        p="${p#"${p%%[![:space:]]*}"}"
+        p="${p%"${p##*[![:space:]]}"}"
+        p="${p%\"}"; p="${p#\"}"
+        p="${p%\'}"; p="${p#\'}"
+        if [ -n "$p" ]; then paths+=("$p"); fi
+        ;;
+    esac
+  # The list-item rule must be tested BEFORE the "a new key ends the block" rule:
+  # a flush-left `- a/b.yaml` starts with a non-space character and would
+  # otherwise be mistaken for the next key and silently end the block.
+  done < <(awk '
+    /^protected:/            { flag = 1; next }
+    flag && /^[[:space:]]*-/ { print; next }
+    /^[^[:space:]]/          { flag = 0 }
+    flag                     { print }
+  ' .sp-guard.yml)
+fi
+
 if [ ${#paths[@]} -eq 0 ]; then
-  # Try .sp-guard.yml
-  if [ -f .sp-guard.yml ]; then
-    # very small YAML reader: read lines under 'protected:' as list items
-    while IFS= read -r line; do
-      case "$line" in
-        "- "*) p="${line#- }"; [ -n "$p" ] && paths+=("$p") ;;
-      esac
-    done < <(awk '/^protected:/ {flag=1; next} /^\S/ {flag=0} flag {print}' .sp-guard.yml)
-  fi
-  if [ ${#paths[@]} -eq 0 ]; then
-    defaults=(
-      "deployment/helm_charts/jenkins/values.production.yaml"
-    )
-    paths=()
-    for p in "${defaults[@]}"; do
-      [ -e "$p" ] && paths+=("$p")
-    done
-  fi
+  defaults=(
+    "deployment/helm_charts/jenkins/values.production.yaml"
+  )
+  for p in "${defaults[@]}"; do
+    # explicit if, not `[ -e ] && paths+=()`: under `set -e` a trailing failed
+    # && list is the loop's exit status and can abort the script.
+    if [ -e "$p" ]; then paths+=("$p"); fi
+  done
 fi
 
 if [ ${#paths[@]} -eq 0 ]; then
@@ -44,8 +75,21 @@ if [ ${#paths[@]} -eq 0 ]; then
 fi
 
 staged="$(git diff --cached --name-only || true)"
+
+# Nothing staged means there is nothing to block. Checking anyway used to match
+# the blank line that `printf "%s\n" ""` produces, so the guard failed with an
+# empty filename whenever it ran outside a real commit (eg. `pre-commit run`).
+if [ -z "$staged" ]; then
+  exit 0
+fi
+
 for p in "${paths[@]}"; do
-  if printf "%s\n" "$staged" | grep -qx "$p"; then
+  # Skip empties defensively, and match literally: -F stops the dots in a path
+  # like values.production.yaml behaving as regex wildcards.
+  if [ -z "$p" ]; then
+    continue
+  fi
+  if printf '%s\n' "$staged" | grep -qxF -- "$p"; then
     echo "Error: Attempt to modify protected file: $p"
     echo "If intentional, export ALLOW_PROD_VALUES=1 and re-commit, or use a release/hotfix branch."
     exit 1
