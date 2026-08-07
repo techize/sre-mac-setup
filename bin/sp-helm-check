@@ -28,5 +28,13 @@ if [ ${#vals[@]} -eq 0 ]; then
   [ -f "$CHART_DIR/values.uat-test.yaml" ] && vals+=("-f" "$CHART_DIR/values.uat-test.yaml")
 fi
 
-helm lint "$CHART_DIR" || { echo "helm lint failed"; exit 1; }
-helm template jenkins "$CHART_DIR" "${vals[@]}" >/dev/null || { echo "helm template failed"; exit 1; }
+# lint must get the same values as template. Without them a chart whose templates
+# dereference nested values (eg. jenkins sa.yaml -> .Values.main.dockerSecretName) fails
+# on a nil pointer every single run, so the hook is a permanent push blocker rather than
+# a gate. This went unnoticed because the pre-push stage was never installed anywhere.
+#
+# ${vals[@]+"${vals[@]}"} not "${vals[@]}": under set -u, macOS's bash 3.2 treats an
+# empty array expansion as an unbound variable. Reachable whenever the chart has no
+# values.uat.yaml / values.uat-test.yaml.
+helm lint "$CHART_DIR" ${vals[@]+"${vals[@]}"} || { echo "helm lint failed"; exit 1; }
+helm template jenkins "$CHART_DIR" ${vals[@]+"${vals[@]}"} >/dev/null || { echo "helm template failed"; exit 1; }
